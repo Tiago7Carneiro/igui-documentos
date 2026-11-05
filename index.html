@@ -195,13 +195,21 @@ h2{font-size:20px;margin:0 0 4px;color:var(--head);text-wrap:balance}
 .wm.canc span{color:rgba(192,57,43,.22)}
 
 #printArea{display:none}
-@page{size:A4;margin:0}
+.cl{break-after:avoid}
+.pbody p:has(+ .sigs),.pbody p:has(+ .box),.pbody p:has(+ ol),.pbody p:has(+ ul){break-after:avoid}
+.pfoot{break-inside:avoid}
+.page.multi::after{content:"fim da página 1 (aprox.)";position:absolute;left:0;right:0;top:285mm;border-top:1.5px dashed #e0a100;color:#b07d00;font:600 8pt/1.6 var(--ui);text-align:right;padding-right:4mm;pointer-events:none}
+.fitinfo{font-size:12px;font-weight:600;padding:3px 8px;border-radius:99px;background:var(--ok-soft);color:var(--ok)}
+.fitinfo.multi{background:var(--bad-soft);color:var(--bad)}
+.fitinfo:empty{display:none}
+@page{size:A4;margin:12mm 0}
 @media print{
   body{background:#fff}
   body::before{display:none}
   body > *:not(#printArea){display:none!important}
   #printArea{display:block}
-  #printArea .page{zoom:1!important;box-shadow:none}
+  #printArea .page{zoom:1!important;box-shadow:none;padding:0 20mm;min-height:273mm}
+  #printArea .page.multi::after{display:none}
 }
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -426,7 +434,7 @@ const R={
    const dig=String(f.formaAss||"").startsWith("Digital");
    const n=adSeq(doc),va=parseBR(f.valorAnt),vn=parseBR(f.valorNovo),dif=vn-va,P=x=>`<span class="ph">${x}</span>`;
    const it=itensDe(f.alteracoes,f._v>=2),corrido=f.altFmt==="Texto corrido";
-   const ORD=["PRIMEIRA","SEGUNDA","TERCEIRA","QUARTA","QUINTA"];let k=0;const cl=t=>`<p style="margin-top:5mm"><b style="color:var(--ink-navy)">CLÁUSULA ${ORD[k++]} — ${t}</b></p>`;
+   const ORD=["PRIMEIRA","SEGUNDA","TERCEIRA","QUARTA","QUINTA"];let k=0;const cl=t=>`<p class="cl" style="margin-top:5mm"><b style="color:var(--ink-navy)">CLÁUSULA ${ORD[k++]} — ${t}</b></p>`;
    const vf=v=>`${brl(v)} (${extenso(v)})`;
    return `<div class="ttl" style="margin-bottom:1.5mm">${n}º TERMO ADITIVO</div><div class="dtl" style="margin-bottom:6mm">ao Contrato nº ${V("contrato","nº do contrato")}</div>
    ${idt([["Contratada",`${esc(c.razao)} (${esc(c.nomeFantasia)}) — CNPJ ${esc(c.cnpj)}`],["Contratante",V("nome","Nome do cliente")+(f.cpf?` — ${esc(f.cpf)}`:"")],["Contrato",`nº ${V("contrato","nº")}, de ${f.dataContrato?br(f.dataContrato):P("data")}`],...(f.endereco?[["Obra",esc(f.endereco)]]:[])])}
@@ -474,7 +482,14 @@ Object.assign(rasc.COM.f,{destinatario:"À Equipe iGUi Zona Sul",assunto:"Funcio
  corpo:"Informamos que, no feriado de Finados, segunda-feira, 2 de novembro de 2026, a loja funcionará conforme o horário definido pelo Shopping Fashion Mall.\nA escala de plantão será divulgada pela gerência até sexta-feira, 30 de outubro. Pedimos que cada consultor confirme sua disponibilidade até essa data.\nContamos com a colaboração de todos."});
 
 function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2800)}
-function fit(){document.querySelectorAll(".paper-fit").forEach(w=>{const p=w.firstElementChild;if(p){p.style.zoom=1;const s=Math.min(1,w.clientWidth/p.offsetWidth);p.style.zoom=s}})}
+/* encaixe automático: se o texto passar um pouco de 1 página, reduz o corpo do texto (até 80%) para caber */
+const A4=297*96/25.4,ZMIN=.8;
+function autoFit(p){const b=p.querySelector(".pbody");if(!b)return;b.style.zoom=1;p.classList.remove("multi");p.style.minHeight="0";
+  const cabe=()=>p.offsetHeight<=A4+1;let z=1;
+  if(!cabe()){b.style.zoom=ZMIN;if(cabe()){let lo=ZMIN,hi=1;for(let i=0;i<7;i++){const m=(lo+hi)/2;b.style.zoom=m;if(cabe())lo=m;else hi=m}z=Math.floor(lo*100)/100;b.style.zoom=z}else{z=1;b.style.zoom=1;p.classList.add("multi")}}
+  p.style.minHeight="";p.dataset.z=z;
+  const info=p.closest(".desk")?.querySelector(".fitinfo");if(info){info.className="fitinfo"+(p.classList.contains("multi")?" multi":"");info.textContent=p.classList.contains("multi")?"Vai ocupar 2 páginas":z<1?`Texto reduzido ${Math.round((1-z)*100)}% para caber em 1 página`:""}}
+function fit(){document.querySelectorAll(".paper-fit").forEach(w=>{const p=w.firstElementChild;if(p){p.style.zoom=1;autoFit(p);const s=Math.min(1,w.clientWidth/p.offsetWidth);p.style.zoom=s}})}
 addEventListener("resize",()=>{cancelAnimationFrame(fit.r);fit.r=requestAnimationFrame(fit)});
 
 function tabs(){const n=S.docs.length;
@@ -552,7 +567,7 @@ function vNovo(){const T=TIPOS[tipo],d=cur();
      <button class="btn" data-act="limpar">Limpar</button>`}
     </div>
    </section>
-   <section class="desk"><div class="desk-h"><span>${ed?"Como vai ficar":"Pré-visualização"} · ${esc(T.nome)}</span>${d.exemplo?`<span class="ex">Exemplo — edite ou clique em Limpar</span>`:""}</div>
+   <section class="desk"><div class="desk-h"><span>${ed?"Como vai ficar":"Pré-visualização"} · ${esc(T.nome)}</span>${d.exemplo?`<span class="ex">Exemplo — edite ou clique em Limpar</span>`:""}<span class="fitinfo"></span></div>
     <div class="paper-fit" id="prev">${paper(prevDoc())}</div></section>
   </div>`;
 }
@@ -612,7 +627,7 @@ function vReg(){
 function vVer(){const d=S.docs.find(x=>x.id===verId);if(!d){verId=null;return vReg()}
   const st={emitido:"Emitido",assinado:"Assinado",cancelado:"Cancelado"}[d.status];
   return `<div class="acts" style="margin:0 0 14px"><button class="btn sm" data-act="voltar">← Registro</button></div>
-  <div class="viewer"><section class="desk"><div class="paper-fit">${paper(d)}</div></section>
+  <div class="viewer"><section class="desk"><div class="desk-h"><span>${esc(TIPOS[d.tipo].nome)}</span><span class="fitinfo"></span></div><div class="paper-fit">${paper(d)}</div></section>
   <aside class="panel"><h2 style="font-family:var(--mono);font-size:18px">${d.num}</h2><p class="sub">${TIPOS[d.tipo].nome}</p>
    <dl class="meta"><div><dt>Situação</dt><dd><span class="pill ${d.status}">${st}</span>${d.status==="assinado"&&d.assinadoEm?` em ${br(d.assinadoEm)}`:""}</dd></div>
    <div><dt>Data do documento</dt><dd>${br(d.data)}</dd></div><div><dt>Para</dt><dd>${esc(resumo(d))}</dd></div>
@@ -629,7 +644,8 @@ function vVer(){const d=S.docs.find(x=>x.id===verId);if(!d){verId=null;return vR
    <p class="foot-note">Ao editar, o número continua o mesmo e cada alteração fica registrada no histórico, com data, hora e os campos mudados. Para trocar o tipo de documento, cancele e use como modelo.</p>
   </aside></div>`;
 }
-function imprimir(d){const t=document.title;$("#printArea").innerHTML=paper(d);document.title=`${d.num} - ${resumo(d)}`.replace(/[\/\\:*?"<>|]/g,"-");
+function imprimir(d){const t=document.title;const vp=document.querySelector(".desk .page");$("#printArea").innerHTML=paper(d);const pp=$("#printArea .page");
+  if(vp&&pp){pp.querySelector(".pbody").style.zoom=vp.dataset.z||1;if(vp.classList.contains("multi")){pp.classList.add("multi");pp.insertAdjacentHTML("beforebegin",`<style>@page{@bottom-right{content:"${d.num} · página " counter(page) " de " counter(pages);font:7.5pt Arial,sans-serif;color:#6b7480;padding-right:20mm}}</style>`)}}document.title=`${d.num} - ${resumo(d)}`.replace(/[\/\\:*?"<>|]/g,"-");
   setTimeout(()=>{try{window.print()}catch(e){}document.title=t},60)}
 
 /* ---------- PESSOAS ---------- */
