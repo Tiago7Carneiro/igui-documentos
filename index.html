@@ -617,7 +617,12 @@ function vConfig(){return `<div class="cols"><section class="panel"><h2>Dados da
    <div class="acts"><button class="btn pri" data-act="sAdd">Adicionar</button></div></section>
   <section class="panel"><h2>Backup</h2><p class="sub">Os documentos ficam salvos neste aparelho. Baixe um backup com frequência e guarde no Drive ou no e-mail.</p>
    <div class="acts"><button class="btn pri" data-act="exportar">Baixar backup (.json)</button><label class="btn" for="imp" style="display:inline-block">Restaurar backup</label><input type="file" id="imp" accept=".json,application/json" hidden></div>
-   ${importando?`<div class="inline-confirm" style="margin-top:12px"><span style="font-size:14px">Restaurar o backup com <b>${importando.docs.length} documentos</b> e ${importando.pessoas?.length||0} cadastros? Os dados atuais deste aparelho serão substituídos.</span><div class="acts" style="margin:0"><button class="btn dan sm" data-act="impOk">Substituir dados</button><button class="btn sm" data-act="impNao">Cancelar</button></div></div>`:""}
+   <div class="sep" style="margin:16px 0 12px"></div>
+   <h2 style="font-size:16px">Transferir por texto</h2><p class="sub" style="margin-bottom:10px">Para passar os dados de um lugar para outro sem arquivo: copie aqui, cole no outro aparelho ou endereço.</p>
+   <div class="acts" style="margin:0 0 10px"><button class="btn" data-act="copiarBk">Copiar backup (${S.docs.length} documentos)</button></div>
+   <div class="fld"><label for="colaBk">Colar backup</label><textarea id="colaBk" rows="3" placeholder="Cole aqui o texto do backup copiado"></textarea></div>
+   <div class="acts" style="margin-top:8px"><button class="btn" data-act="restTexto">Restaurar do texto colado</button></div>
+   ${importando?`<div class="inline-confirm" style="margin-top:12px"><span style="font-size:14px">Restaurar o backup com <b>${importando.docs.length} documentos</b> e ${importando.pessoas?.length||0} cadastros? Os dados atuais deste aparelho${S.docs.length?` (${S.docs.length} documento${S.docs.length>1?"s":""})`:""} serão substituídos.</span><div class="acts" style="margin:0"><button class="btn dan sm" data-act="impOk">Substituir dados</button><button class="btn sm" data-act="impNao">Cancelar</button></div></div>`:""}
    <p class="foot-note">Numeração atual: ${Object.keys(S.cont).length?Object.entries(S.cont).sort().map(([k,v])=>`${k}-${pad3(v)}`).join(" · "):"nenhum documento emitido"}.</p></section></div></div>`}
 
 /* ---------- eventos ---------- */
@@ -649,6 +654,11 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(
   if(a==="pDel"){apagando=v;render();return}
   if(a==="pDelNao"){apagando=null;render();return}
   if(a==="pDelOk"){S.pessoas=S.pessoas.filter(x=>x.id!==v);apagando=null;if(pEdit===v)pEdit=null;save();render();toast("Cadastro excluído");return}
+  if(a==="copiarBk"){const txt=JSON.stringify(S);const ok=()=>toast("Backup copiado. Agora cole no outro app, em Configurações.");
+    const fb=()=>{const ta=$("#colaBk");ta.value=txt;ta.focus();ta.select();try{document.execCommand("copy");ok()}catch(e){toast("Selecionei o texto no campo abaixo. Copie manualmente.")}};
+    try{navigator.clipboard.writeText(txt).then(ok,fb)}catch(e){fb()}return}
+  if(a==="restTexto"){const v=$("#colaBk").value.trim();if(!v){toast("Cole o texto do backup no campo primeiro");return}
+    try{const o=JSON.parse(v);if(!o||!Array.isArray(o.docs))throw 0;importando=o;render();scrollTo(0,document.body.scrollHeight)}catch(e){toast("Esse texto não é um backup válido deste app. Copie de novo, inteiro.")}return}
   if(a==="exportar"){try{const bl=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});const u=URL.createObjectURL(bl);const l=document.createElement("a");l.href=u;l.download=`igui-documentos-backup-${hoje()}.json`;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}catch(err){toast("Não foi possível baixar o arquivo aqui")}return}
   if(a==="impOk"&&importando){S=fixo({...seed(),...importando,cfg:{...CFG0,...importando.cfg}});importando=null;save();ORDEM.forEach(t=>rasc[t]=novoRasc(t));render();toast("Backup restaurado");return}
   if(a==="sAdd"){const n=$("#s_nome").value.trim();if(!n){$("#s_nome").closest(".fld").classList.add("err");toast("Informe o nome");return}
