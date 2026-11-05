@@ -71,6 +71,15 @@ h2{font-size:20px;margin:0 0 4px;color:var(--head);text-wrap:balance}
 .fld label i{font-style:normal;color:var(--bad)}
 .fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--line);background:var(--field);border-radius:8px;padding:9px 10px;min-width:0}
 .fld textarea{resize:vertical;line-height:1.45}
+.rtw{border:1px solid var(--line);background:var(--field);border-radius:8px;min-width:0}
+.rtw:focus-within{border-color:var(--blue)}
+.rtb{display:flex;gap:2px;padding:4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.rtb button{border:0;background:none;width:32px;height:30px;border-radius:6px;font-size:15px;color:var(--muted);font-family:Georgia,"Times New Roman",serif}
+.rtb button:hover{background:var(--surface)}
+.rtb button[aria-pressed="true"]{background:var(--blue-soft);color:var(--blue)}
+.rte{padding:9px 10px;line-height:1.5;outline:none;white-space:pre-wrap;word-break:break-word;overflow-y:auto;max-height:420px}
+.rte.vazio::before{content:attr(data-ph);color:var(--muted);opacity:.7;pointer-events:none;white-space:pre-wrap}
+.fld.err .rtw{border-color:var(--bad);background:var(--bad-soft)}
 .fld.err input,.fld.err textarea,.fld.err select{border-color:var(--bad);background:var(--bad-soft)}
 .fld small{font-size:12px;color:var(--muted)}
 .hint{font-size:13px;padding:9px 11px;border-radius:8px;background:var(--blue-soft);color:var(--head)}
@@ -304,7 +313,7 @@ const TIPOS={
    {k:"cpf",l:"CPF ou CNPJ"},
    {k:"endereco",l:"Endereço da obra",req:1},
    {k:"modelo",l:"Piscina / modelo",req:1,ph:"iGUi Keramos 1,89 x 1,81 x 0,86 m"},
-   {k:"itens",l:"Itens entregues",t:"area",rows:5,h:"Um item por linha.",def:"Piscina instalada e abastecida\nFiltro e casa de máquinas\nManual do proprietário e certificado de garantia"},
+   {k:"itens",l:"Itens entregues",t:"area",lista:1,rows:5,h:"Enter quebra a linha dentro do mesmo item. Para começar outro item, deixe uma linha em branco.",def:"Piscina instalada e abastecida\n\nFiltro e casa de máquinas\n\nManual do proprietário e certificado de garantia"},
    {k:"obs",l:"Observações ou pendências",t:"area",rows:3,ph:"Deixe em branco se não houver."},
    {k:"sign",t:"sign",l:"Assina pela empresa"}],
   resumo:f=>`${f.nome||""}${f.modelo?" · "+f.modelo:""}`},
@@ -313,7 +322,8 @@ const TIPOS={
    {k:"nome",l:"Contratante (cliente)",req:1},
    {r:[{k:"cpf",l:"CPF ou CNPJ"},{k:"contrato",l:"Nº / identificação do contrato",req:1,ph:"Ex.: 0458/2026"}]},
    {r:[{k:"dataContrato",l:"Data do contrato original",t:"date",req:1},{k:"endereco",l:"Endereço da obra"}]},
-   {k:"alteracoes",l:"Alterações acordadas",t:"area",rows:6,req:1,h:"Uma alteração por linha. Elas viram itens numerados no documento.",ph:"Substituição do modelo iGUi Keramos pelo modelo iGUi Infinity 7,00 x 3,50 m\nInclusão de iluminação LED com 2 refletores\nNovo prazo de entrega: 15/12/2026"},
+   {k:"altFmt",l:"Formato das alterações",t:"select",opts:["Itens numerados","Texto corrido"],def:"Itens numerados"},
+   {k:"alteracoes",l:"Alterações acordadas",t:"area",lista:1,rows:7,req:1,h:"Enter quebra a linha dentro da mesma alteração. Para começar a próxima, deixe uma linha em branco.",ph:"Substituição do modelo iGUi Keramos pelo modelo iGUi Infinity 7,00 x 3,50 m\n\nInclusão de iluminação LED com 2 refletores"},
    {r:[{k:"valorAnt",l:"Valor original (R$)",t:"money",ph:"opcional"},{k:"valorNovo",l:"Novo valor total (R$)",t:"money",ph:"opcional"}]},
    {k:"pagamento",l:"Pagamento da diferença",t:"area",rows:2,ph:"opcional — ex.: diferença paga via Pix na assinatura deste aditivo"},
    {k:"formaAss",l:"Como será assinado",t:"select",opts:["Digital (plataforma de assinatura)","Em papel (2 vias)"],def:"Digital (plataforma de assinatura)"},
@@ -341,7 +351,13 @@ const ORDEM=["COM","ADV","SUS","REC","NOT","TER","ADI","DEC"];
 const allFields=t=>TIPOS[t].fields.flatMap(x=>x.r?x.r.map(y=>({...y,show:x.show})):[x]);
 
 /* ---------- renderização da folha ---------- */
-const paras=s=>String(s||"").split(/\n+/).map(x=>x.trim()).filter(Boolean).map(x=>`<p>${esc(x)}</p>`).join("");
+const rich=s=>esc(s).replace(/&lt;(\/?)([biu])&gt;/g,"<$1$2>");
+const limpaT=s=>s.replace(/<(\/?)([biu])>/g,"").trim();
+const paras=s=>String(s||"").split(/\n+/).filter(x=>limpaT(x)).map(x=>`<p>${rich(x.trim())}</p>`).join("");
+/* listas: v2 = itens separados por linha em branco; v1 (antigos) = um item por linha */
+const itensDe=(s,v2)=>String(s||"").split(v2?/\n\s*\n/:/\n/).map(x=>x.replace(/^\n+|\n+$/g,"")).filter(x=>limpaT(x)).map(x=>x.split("\n").map(l=>rich(l)).join("<br>"));
+const LISTAS=["itens","alteracoes"];
+function up2(f){if(f._v>=2)return f;const o={...f,_v:2};LISTAS.forEach(k=>{if(o[k])o[k]=String(o[k]).split("\n").map(x=>x.trim()).filter(Boolean).join("\n\n")});return o}
 const idt=rows=>`<table class="idt">${rows.map(([a,b])=>`<tr><td>${a}</td><td>${b}</td></tr>`).join("")}</table>`;
 const sig=(b,s)=>`<div class="sig"><div class="ln"></div><b>${b}</b>${s?`<span>${s}</span>`:""}</div>`;
 const sigEmp=(c,f={})=>{const n=f.signNome||c.representante,g=f.signCargo===undefined?c.cargoRep:f.signCargo;return sig(esc(c.razao),esc(n)+(g?" — "+esc(g):""))};
@@ -398,10 +414,10 @@ const R={
    <p>Na ausência de retorno ou resolução dentro do prazo informado, a empresa se resguarda no direito de adotar os meios legais cabíveis para a cobrança do débito.</p>
    <p>Permanecemos à disposição para contato e abertos ao diálogo para uma solução amigável.</p>
    <div class="clos"><p>Atenciosamente,</p><div class="cn">${V("assinante","Nome")}</div><div>${V("setor","Setor")}</div></div>`},
- TER(f,{V,c}){const it=String(f.itens||"").split("\n").map(s=>s.trim()).filter(Boolean);
+ TER(f,{V,c}){const it=itensDe(f.itens,f._v>=2);
    return `<div class="ttl">TERMO DE ENTREGA E ACEITE DE OBRA</div>
    <p>Pelo presente termo, <b>${V("nome","Nome do cliente")}</b>${f.cpf?`, inscrito(a) sob o nº ${esc(f.cpf)}`:""}, doravante CONTRATANTE, declara ter recebido de <b>${esc(c.razao)}</b> (${esc(c.nomeFantasia)}), CNPJ ${esc(c.cnpj)}, nesta data, a obra de instalação da piscina <b>${V("modelo","modelo")}</b>, localizada em ${V("endereco","endereço da obra")}, em condições de uso e acabamento, juntamente com os itens abaixo:</p>
-   ${it.length?`<ul>${it.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:`<p><span class="ph">Itens entregues</span></p>`}
+   ${it.length?`<ul>${it.map(x=>`<li>${x}</li>`).join("")}</ul>`:`<p><span class="ph">Itens entregues</span></p>`}
    <p>O CONTRATANTE declara ainda ter recebido orientações sobre o uso da piscina, a operação dos equipamentos, o tratamento da água e os cuidados de manutenção, bem como as condições de garantia do fabricante.</p>
    ${f.obs?`<p><b>Observações e pendências registradas:</b></p><div class="box">${paras(f.obs)}</div>`:""}
    <p>A partir desta data, a guarda, a conservação e a manutenção da piscina e dos equipamentos passam a ser de responsabilidade do CONTRATANTE, mantidas as garantias aplicáveis${f.obs?" e o compromisso de solução das pendências acima":""}.</p>
@@ -409,14 +425,14 @@ const R={
  ADI(f,{V,c,doc}){
    const dig=String(f.formaAss||"").startsWith("Digital");
    const n=adSeq(doc),va=parseBR(f.valorAnt),vn=parseBR(f.valorNovo),dif=vn-va,P=x=>`<span class="ph">${x}</span>`;
-   const it=String(f.alteracoes||"").split("\n").map(x=>x.trim()).filter(Boolean);
+   const it=itensDe(f.alteracoes,f._v>=2),corrido=f.altFmt==="Texto corrido";
    const ORD=["PRIMEIRA","SEGUNDA","TERCEIRA","QUARTA","QUINTA"];let k=0;const cl=t=>`<p style="margin-top:5mm"><b style="color:var(--ink-navy)">CLÁUSULA ${ORD[k++]} — ${t}</b></p>`;
    const vf=v=>`${brl(v)} (${extenso(v)})`;
    return `<div class="ttl" style="margin-bottom:1.5mm">${n}º TERMO ADITIVO</div><div class="dtl" style="margin-bottom:6mm">ao Contrato nº ${V("contrato","nº do contrato")}</div>
    ${idt([["Contratada",`${esc(c.razao)} (${esc(c.nomeFantasia)}) — CNPJ ${esc(c.cnpj)}`],["Contratante",V("nome","Nome do cliente")+(f.cpf?` — ${esc(f.cpf)}`:"")],["Contrato",`nº ${V("contrato","nº")}, de ${f.dataContrato?br(f.dataContrato):P("data")}`],...(f.endereco?[["Obra",esc(f.endereco)]]:[])])}
    <p>As partes acima qualificadas, de comum acordo, resolvem celebrar o presente ${n}º Termo Aditivo ao contrato acima identificado, mediante as cláusulas e condições a seguir.</p>
-   ${cl("DAS ALTERAÇÕES")}<p>Ficam acordadas as seguintes alterações no objeto e nas condições do contrato original:</p>
-   ${it.length?`<ol style="margin:0 0 4mm;padding-left:7mm">${it.map(x=>`<li style="margin-bottom:1mm">${esc(x)}</li>`).join("")}</ol>`:`<p>${P("Alterações acordadas")}</p>`}
+   ${cl("DAS ALTERAÇÕES")}${corrido?"":`<p>Ficam acordadas as seguintes alterações no objeto e nas condições do contrato original:</p>`}
+   ${it.length?(corrido?it.map(x=>`<p>${x}</p>`).join(""):`<ol style="margin:0 0 4mm;padding-left:7mm">${it.map(x=>`<li style="margin-bottom:1.5mm">${x}</li>`).join("")}</ol>`):`<p>${P("Alterações acordadas")}</p>`}
    ${va&&vn?`${cl("DO VALOR")}<p>Em razão das alterações acima, o valor total do contrato passa de ${vf(va)} para <b>${vf(vn)}</b>${dif?`, representando ${dif>0?"um acréscimo":"uma redução"} de ${vf(Math.abs(dif))}`:", sem alteração de valor"}.</p>${f.pagamento?paras(f.pagamento):""}`
      :vn?`${cl("DO VALOR")}<p>Em razão das alterações acima, o valor total do contrato passa a ser de <b>${vf(vn)}</b>.</p>${f.pagamento?paras(f.pagamento):""}`
      :f.pagamento?`${cl("DO PAGAMENTO")}${paras(f.pagamento)}`:""}
@@ -451,7 +467,7 @@ let ed=null,view="novo",tipo="COM",verId=null,filtro="todos",busca="",pEdit=null
 const rasc={};
 const cur=()=>ed||rasc[tipo];
 const orig=()=>ed&&S.docs.find(x=>x.id===ed.id);
-function novoRasc(t){const f={};allFields(t).forEach(x=>{if(x.def!==undefined)f[x.k]=x.def});if(t==="NOT")f.assinante=S.cfg.representante;if(allFields(t).some(x=>x.k==="sign")){const g=S.signatarios[0];if(g){f.signNome=g.nome;f.signCargo=g.cargo}}if(t==="SUS")f.inicio=hoje();return{data:hoje(),local:S.cfg.cidade,f}}
+function novoRasc(t){const f={_v:2};allFields(t).forEach(x=>{if(x.def!==undefined)f[x.k]=x.def});if(t==="NOT")f.assinante=S.cfg.representante;if(allFields(t).some(x=>x.k==="sign")){const g=S.signatarios[0];if(g){f.signNome=g.nome;f.signCargo=g.cargo}}if(t==="SUS")f.inicio=hoje();return{data:hoje(),local:S.cfg.cidade,f}}
 ORDEM.forEach(t=>rasc[t]=novoRasc(t));
 rasc.COM.exemplo=true;
 Object.assign(rasc.COM.f,{destinatario:"À Equipe iGUi Zona Sul",assunto:"Funcionamento da loja no feriado de Finados",
@@ -478,7 +494,7 @@ function campo(x,d){
     return `<div class="fld"><label for="${id}">${esc(x.l)}</label><select id="${id}" data-sign>${L.map(g=>`<option value="${g.id}" ${sel&&sel.id===g.id?"selected":""}>${esc(g.nome)}${g.cargo?" — "+esc(g.cargo):""}</option>`).join("")}<option value="" ${sel?"":"selected"}>Outra pessoa…</option></select></div>
     ${sel?"":`<div class="row2">${campo({k:"signNome",l:"Nome de quem assina",req:1},d)}${campo({k:"signCargo",l:"Cargo"},d)}</div>`}<small style="font-size:12px;color:var(--muted);margin-top:-6px">Cadastre quem pode assinar em Configurações.</small>`}
   let inp;
-  if(x.t==="area")inp=`<textarea id="${id}" data-k="${x.k}" rows="${x.rows||4}"${ph}>${esc(v)}</textarea>`;
+  if(x.t==="area")inp=`<div class="rtw"><div class="rtb" role="toolbar" aria-label="Formatação"><button type="button" data-fmt="bold" title="Negrito" aria-label="Negrito"><b>B</b></button><button type="button" data-fmt="italic" title="Itálico" aria-label="Itálico"><i>I</i></button><button type="button" data-fmt="underline" title="Sublinhado" aria-label="Sublinhado"><u>U</u></button></div><div class="rte${limpaT(String(v))?"":" vazio"}" id="${id}" data-k="${x.k}" contenteditable="true" role="textbox" aria-multiline="true" data-ph="${esc(x.ph||"")}" style="min-height:${(x.rows||4)*1.5+1.2}em">${paraEditor(v)}</div></div>`;
   else if(x.t==="select")inp=`<select id="${id}" data-k="${x.k}" data-re>${x.opts.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
   else inp=`<input id="${id}" data-k="${x.k}" value="${esc(v)}" type="${x.t==="date"?"date":"text"}"${x.list?' list="dlFunc" autocomplete="off"':""}${x.t==="num"?' inputmode="numeric"':x.t==="money"?' inputmode="decimal"':""}${ph}>`;
   return `<div class="fld" data-f="${x.k}">${lab}${inp}${x.h?`<small>${esc(x.h)}</small>`:""}</div>`;
@@ -494,6 +510,29 @@ function dica0(d,f){
   if(tipo==="REC"&&parseBR(f.valor))return `<div class="hint">${esc(brl(parseBR(f.valor)))} — ${esc(extenso(parseBR(f.valor)))}</div>`;
   return "";
 }
+function paraEditor(v){return String(v||"").split("\n").map(rich).join("<br>")+(String(v||"").endsWith("\n")?"<br>":"")}
+function serial(el){let o="";const st={b:0,i:0,u:0};
+  const walk=(n,top)=>{n.childNodes.forEach((c,ix)=>{
+    if(c.nodeType===3){o+=c.nodeValue.replace(/\u00a0/g," ");return}
+    if(c.nodeType!==1)return;const tg=c.tagName;
+    if(tg==="BR"){o+="\n";return}
+    const blk=tg==="DIV"||tg==="P";if(blk&&o&&!o.endsWith("\n"))o+="\n";
+    const sty=c.style||{},fw=sty.fontWeight;
+    const ab=[];if((tg==="B"||tg==="STRONG"||fw==="bold"||+fw>=600)&&!st.b)ab.push("b");if((tg==="I"||tg==="EM"||sty.fontStyle==="italic")&&!st.i)ab.push("i");if((tg==="U"||String(sty.textDecoration||sty.textDecorationLine||"").includes("underline"))&&!st.u)ab.push("u");
+    ab.forEach(t=>{o+=`<${t}>`;st[t]=1});walk(c);ab.reverse().forEach(t=>{o+=`</${t}>`;st[t]=0});
+    if(blk&&c.nextSibling&&!o.endsWith("\n"))o+="\n";
+  })};walk(el);
+  return o.replace(/<([biu])><\/\1>/g,"").replace(/\n$/,"")}
+let rtRange=null,rtEl=null;
+document.addEventListener("selectionchange",()=>{const sel=getSelection();if(!sel.rangeCount)return;const n=sel.anchorNode;const el=n&&(n.nodeType===1?n:n.parentElement)?.closest?.(".rte");
+  if(el){rtEl=el;rtRange=sel.getRangeAt(0).cloneRange();el.closest(".rtw").querySelectorAll("[data-fmt]").forEach(b=>{let on=false;try{on=document.queryCommandState(b.dataset.fmt)}catch(e){}b.setAttribute("aria-pressed",on)})}});
+document.addEventListener("mousedown",e=>{if(e.target.closest("[data-fmt]"))e.preventDefault()});
+document.addEventListener("click",e=>{const b=e.target.closest("[data-fmt]");if(!b)return;const el=b.closest(".rtw").querySelector(".rte");
+  el.focus();if(rtEl===el&&rtRange){const sel=getSelection();sel.removeAllRanges();sel.addRange(rtRange)}
+  try{document.execCommand("styleWithCSS",false,false)}catch(err){}document.execCommand(b.dataset.fmt);el.dispatchEvent(new Event("input",{bubbles:true}))});
+document.addEventListener("beforeinput",e=>{if(e.target.classList?.contains("rte")&&e.inputType==="insertParagraph"){e.preventDefault();document.execCommand("insertLineBreak")}});
+document.addEventListener("keydown",e=>{if(e.target.classList?.contains("rte")&&e.key==="Enter"&&!e.isComposing){e.preventDefault();document.execCommand("insertLineBreak")}});
+document.addEventListener("paste",e=>{if(!e.target.closest?.(".rte"))return;e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text/plain");document.execCommand("insertText",false,t)});
 function vNovo(){const T=TIPOS[tipo],d=cur();
   const flds=T.fields.filter(x=>!x.show||x.show(d.f)).map(x=>x.r?`<div class="row2">${x.r.map(y=>campo(y,d)).join("")}</div>`:campo(x,d)).join("");
   return `<div class="novo">
@@ -522,7 +561,7 @@ function atualizaPrev(){$("#prev").innerHTML=paper(prevDoc());$("#dica").innerHT
 function emitir(){
   const d=cur(),T=TIPOS[tipo];let falta=[];
   document.querySelectorAll(".fld.err").forEach(e=>e.classList.remove("err"));
-  T.fields.filter(x=>!x.show||x.show(d.f)).flatMap(x=>x.r||[x]).forEach(x=>{if(x.req&&!String(d.f[x.k]??"").trim()){falta.push(x.l);const el=document.querySelector(`[data-f="${x.k}"]`);el&&el.classList.add("err")}});
+  T.fields.filter(x=>!x.show||x.show(d.f)).flatMap(x=>x.r||[x]).forEach(x=>{if(x.req&&!limpaT(String(d.f[x.k]??""))){falta.push(x.l);const el=document.querySelector(`[data-f="${x.k}"]`);el&&el.classList.add("err")}});
   if(tipo==="REC"&&d.f.valor&&!parseBR(d.f.valor))falta.push("Valor válido");
   if(T.fields.some(x=>x.k==="sign"&&(!x.show||x.show(d.f)))&&!String(d.f.signNome||"").trim()){falta.push("Quem assina");const el=document.querySelector('[data-f="signNome"]');el&&el.classList.add("err")}
   if(!d.data)falta.push("Data do documento");
@@ -544,10 +583,10 @@ const ROT={data:"Data do documento",local:"Local",signNome:"Quem assina",signCar
 const rot=(t,k)=>ROT[k]||(allFields(t).find(x=>x.k===k)||{}).l||k;
 function difs(t,a,b){const ks=new Set([...Object.keys(a.f),...Object.keys(b.f)]);const o=[];if(a.data!==b.data)o.push("data");if((a.local||"")!==(b.local||""))o.push("local");
   ks.forEach(k=>{if(k==="testem"&&!a.f.testem&&temTest("",{testem:b.f.testem})===temTest(t,a.f))return;if(/cpf$/.test(k)&&/^test/.test(k))return;if(k!=="pessoa"&&String(a.f[k]??"")!==String(b.f[k]??""))o.push(k)});return [...new Set(o.map(k=>rot(t,k)))]}
-function editar(d){ed={id:d.id,data:d.data,local:d.local,f:{...d.f}};if(!ed.f.testem)ed.f.testem=temTest(d.tipo,d.f)?TCOM:TSEM;tipo=d.tipo;view="novo";verId=null;cancelando=false;render();scrollTo(0,0)}
+function editar(d){ed={id:d.id,data:d.data,local:d.local,f:up2({...d.f})};ed.base=up2({...d.f});if(!ed.f.testem)ed.f.testem=temTest(d.tipo,d.f)?TCOM:TSEM;tipo=d.tipo;view="novo";verId=null;cancelando=false;render();scrollTo(0,0)}
 function salvarEd(){const o=orig();if(!o){ed=null;render();return}
   const falta=emitir();if(falta.length){toast("Preencha: "+falta.join(", "));return}
-  const ch=difs(o.tipo,o,ed);if(!ch.length){toast("Nenhuma alteração para salvar");return}
+  const ch=difs(o.tipo,{data:o.data,local:o.local,f:ed.base||o.f},ed);if(!ch.length){toast("Nenhuma alteração para salvar");return}
   (o.versoes=o.versoes||[]).push({em:new Date().toISOString(),data:o.data,local:o.local,f:o.f,campos:ch,status:o.status});
   const f={...ed.f};delete f.pessoa;Object.assign(o,{data:ed.data,local:ed.local,f,editadoEm:new Date().toISOString()});
   if(o.tipo==="ADV"||o.tipo==="SUS")o.ant=antecedentes({f,id:o.id,criadoEm:o.criadoEm});
@@ -649,7 +688,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(
   if(a==="assinado"&&d){d.status="assinado";d.assinadoEm=hoje();save();render();toast(`${d.num} marcado como assinado`);return}
   if(a==="desassinar"&&d){d.status="emitido";delete d.assinadoEm;save();render();return}
   if(a==="editar"&&d)return editar(d);
-  if(a==="duplicar"&&d){tipo=d.tipo;rasc[tipo]={data:hoje(),local:S.cfg.cidade,f:{...d.f}};view="novo";verId=null;render();toast("Copiado para um novo rascunho");return}
+  if(a==="duplicar"&&d){tipo=d.tipo;rasc[tipo]={data:hoje(),local:S.cfg.cidade,f:up2({...d.f})};view="novo";verId=null;render();toast("Copiado para um novo rascunho");return}
   if(a==="cancelar"){cancelando=true;render();$("#motivoC")?.focus();return}
   if(a==="cancelarNao"){cancelando=false;render();return}
   if(a==="cancelarOk"&&d){d.status="cancelado";d.motivoCancel=$("#motivoC").value.trim();d.canceladoEm=hoje();cancelando=false;save();render();toast(`${d.num} cancelado`);return}
@@ -681,6 +720,7 @@ document.addEventListener("input",e=>{const t=e.target;
   if(view!=="novo")return;const d=cur();
   if(t.id==="d_data"){d.data=t.value;atualizaPrev();return}
   if(t.id==="d_local"){d.local=t.value;atualizaPrev();return}
+  if(t.classList&&t.classList.contains("rte")){const v=serial(t);d.f[t.dataset.k]=v;t.classList.toggle("vazio",!limpaT(v));delete d.exemplo;t.closest(".fld")?.classList.remove("err");atualizaPrev();return}
   if(t.dataset.k==="test1"||t.dataset.k==="test2"){const p=S.pessoas.find(x=>norm(x.nome)===norm(t.value));d.f[t.dataset.k+"cpf"]=p&&p.cpf||""}
   if(t.dataset.k){d.f[t.dataset.k]=t.value;delete d.exemplo;t.closest(".fld")?.classList.remove("err");if(t.hasAttribute("data-re")){render();return}atualizaPrev()}
 });
