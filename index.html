@@ -168,6 +168,7 @@ h2{font-size:20px;margin:0 0 4px;color:var(--head);text-wrap:balance}
 .clos p{margin:0 0 1mm}
 .clos .cn{color:var(--ink-navy);font-weight:700;font-size:12.5pt}
 .sigs{display:grid;grid-template-columns:1fr 1fr;gap:15mm 12mm;margin-top:16mm;break-inside:avoid}
+.sigs.tst{margin-top:13mm}
 .sigs.one{grid-template-columns:1fr;max-width:95mm;margin-left:auto;margin-right:auto;text-align:center}
 .sig .ln{border-top:1px solid var(--ink);margin-bottom:1.5mm}
 .sig b{display:block;font-size:10pt}
@@ -269,8 +270,7 @@ const TIPOS={
    {r:[{k:"cpf",l:"CPF"},{k:"cargo",l:"Cargo"}]},
    {k:"dataOc",l:"Data da ocorrência",t:"date",req:1},
    {k:"motivo",l:"Descrição do ocorrido",t:"area",rows:5,req:1,ph:"Descreva o fato de forma objetiva: o que aconteceu, quando e onde."},
-   {k:"sign",t:"sign",l:"Assina pela empresa"},
-   {r:[{k:"test1",l:"Testemunha 1",ph:"opcional"},{k:"test2",l:"Testemunha 2",ph:"opcional"}]}],
+   {k:"sign",t:"sign",l:"Assina pela empresa"}],
   resumo:f=>f.nome},
  SUS:{nome:"Suspensão Disciplinar",curto:"Suspensão",papeis:["Funcionário"],fields:[
    {k:"pessoa",t:"pessoa",l:"Funcionário"},
@@ -279,8 +279,7 @@ const TIPOS={
    {k:"dataOc",l:"Data da ocorrência",t:"date",req:1},
    {k:"motivo",l:"Descrição do ocorrido",t:"area",rows:4,req:1},
    {r:[{k:"dias",l:"Dias de suspensão",t:"num",def:"1",req:1},{k:"inicio",l:"Início",t:"date",req:1}]},
-   {k:"sign",t:"sign",l:"Assina pela empresa"},
-   {r:[{k:"test1",l:"Testemunha 1",ph:"opcional"},{k:"test2",l:"Testemunha 2",ph:"opcional"}]}],
+   {k:"sign",t:"sign",l:"Assina pela empresa"}],
   resumo:f=>f.nome},
  REC:{nome:"Recibo",curto:"Recibo",papeis:papelAll,fields:[
    {k:"modalidade",l:"Tipo de recibo",t:"select",opts:["Recebimento de cliente","Pagamento a prestador","Vale / adiantamento","Comissão"],def:"Recebimento de cliente"},
@@ -317,8 +316,8 @@ const TIPOS={
    {k:"alteracoes",l:"Alterações acordadas",t:"area",rows:6,req:1,h:"Uma alteração por linha. Elas viram itens numerados no documento.",ph:"Substituição do modelo iGUi Keramos pelo modelo iGUi Infinity 7,00 x 3,50 m\nInclusão de iluminação LED com 2 refletores\nNovo prazo de entrega: 15/12/2026"},
    {r:[{k:"valorAnt",l:"Valor original (R$)",t:"money",ph:"opcional"},{k:"valorNovo",l:"Novo valor total (R$)",t:"money",ph:"opcional"}]},
    {k:"pagamento",l:"Pagamento da diferença",t:"area",rows:2,ph:"opcional — ex.: diferença paga via Pix na assinatura deste aditivo"},
-   {k:"sign",t:"sign",l:"Assina pela empresa"},
-   {r:[{k:"test1",l:"Testemunha 1",ph:"opcional"},{k:"test2",l:"Testemunha 2",ph:"opcional"}]}],
+   {k:"formaAss",l:"Como será assinado",t:"select",opts:["Digital (plataforma de assinatura)","Em papel (2 vias)"],def:"Digital (plataforma de assinatura)"},
+   {k:"sign",t:"sign",l:"Assina pela empresa"}],
   resumo:f=>`${f.nome||""}${f.contrato?" · contrato "+f.contrato:""}`},
  DEC:{nome:"Declaração",curto:"Declaração",papeis:papelAll,fields:[
    {k:"modelo",l:"Modelo",t:"select",opts:["Vínculo de trabalho","Texto livre"],def:"Vínculo de trabalho"},
@@ -331,6 +330,13 @@ const TIPOS={
    {k:"sign",t:"sign",l:"Assina pela empresa"}],
   resumo:f=>f.modelo==="Texto livre"?(f.destinatario||"Texto livre"):f.nome}
 };
+const TCOM="Com 2 testemunhas",TSEM="Sem testemunhas";
+const TDEF={ADV:TCOM,SUS:TCOM,TER:TCOM};
+Object.keys(TIPOS).forEach(t=>TIPOS[t].fields.push(
+  {k:"testem",l:"Testemunhas",t:"select",opts:[TSEM,TCOM],def:TDEF[t]||TSEM},
+  {r:[{k:"test1",l:"Testemunha 1",ph:"nome (opcional)",list:1},{k:"test2",l:"Testemunha 2",ph:"nome (opcional)",list:1}],show:f=>f.testem===TCOM}));
+function temTest(t,f){if(f.testem)return f.testem===TCOM;
+  if(t==="ADV"||t==="SUS")return true;if(t==="ADI")return !String(f.formaAss||"").startsWith("Digital")||!!(f.test1||f.test2);return false}
 const ORDEM=["COM","ADV","SUS","REC","NOT","TER","ADI","DEC"];
 const allFields=t=>TIPOS[t].fields.flatMap(x=>x.r?x.r.map(y=>({...y,show:x.show})):[x]);
 
@@ -339,7 +345,7 @@ const paras=s=>String(s||"").split(/\n+/).map(x=>x.trim()).filter(Boolean).map(x
 const idt=rows=>`<table class="idt">${rows.map(([a,b])=>`<tr><td>${a}</td><td>${b}</td></tr>`).join("")}</table>`;
 const sig=(b,s)=>`<div class="sig"><div class="ln"></div><b>${b}</b>${s?`<span>${s}</span>`:""}</div>`;
 const sigEmp=(c,f={})=>{const n=f.signNome||c.representante,g=f.signCargo===undefined?c.cargoRep:f.signCargo;return sig(esc(c.razao),esc(n)+(g?" — "+esc(g):""))};
-const sigT=(f,i)=>f["test"+i]?sig(esc(f["test"+i]),"Testemunha · CPF: ____________________"):sig("Testemunha "+i,"Nome e CPF");
+const sigT=(f,i)=>f["test"+i]?sig(esc(f["test"+i]),"Testemunha · CPF: "+(f["test"+i+"cpf"]?esc(f["test"+i+"cpf"]):"____________________")):sig("Testemunha "+i,"Nome e CPF");
 function antecedentes(doc){
   if(doc.ant)return doc.ant;
   const n=norm(doc.f.nome);if(!n)return[];
@@ -360,8 +366,7 @@ const R={
    ${a.length?`<p>Registramos que esta não é a primeira medida disciplinar aplicada a V.Sa., conforme ${antTexto(a)}.</p>`:""}
    <p>Esta medida tem caráter educativo e tem por objetivo evitar a repetição da conduta. A reincidência poderá acarretar a aplicação de penalidades mais severas, inclusive suspensão ou rescisão do contrato de trabalho por justa causa, nos termos do art. 482 da Consolidação das Leis do Trabalho (CLT).</p>
    <p>Solicitamos que assine a segunda via deste documento, declarando ciência de seu teor. A assinatura não implica concordância com o conteúdo.</p>
-   <div class="sigs">${sigEmp(c,f)}${sig(V("nome","Empregado(a)"),"Ciente em ____/____/________")}${sigT(f,1)}${sigT(f,2)}</div>
-   <p class="nota">Em caso de recusa do(a) empregado(a) em assinar, as testemunhas atestam que este documento lhe foi apresentado e lido.</p>`},
+   <div class="sigs">${sigEmp(c,f)}${sig(V("nome","Empregado(a)"),"Ciente em ____/____/________")}</div>`},
  SUS(f,{V,c,doc}){const a=antecedentes(doc);const n=parseInt(f.dias)||0;
    const ini=f.inicio,fim=ini&&n?addDias(ini,n-1):"",ret=ini&&n?addDias(ini,n):"";
    const P=x=>`<span class="ph">${x}</span>`;
@@ -373,8 +378,7 @@ const R={
    <p>Os dias de suspensão não serão remunerados e serão descontados, inclusive para efeito do descanso semanal remunerado, conforme a legislação vigente.</p>
    <p>Advertimos que a reincidência poderá ensejar a rescisão do contrato de trabalho por justa causa, nos termos do art. 482 da Consolidação das Leis do Trabalho (CLT).</p>
    <p>Solicitamos que assine a segunda via deste documento, declarando ciência de seu teor. A assinatura não implica concordância com o conteúdo.</p>
-   <div class="sigs">${sigEmp(c,f)}${sig(V("nome","Empregado(a)"),"Ciente em ____/____/________")}${sigT(f,1)}${sigT(f,2)}</div>
-   <p class="nota">Em caso de recusa do(a) empregado(a) em assinar, as testemunhas atestam que este documento lhe foi apresentado e lido.</p>`},
+   <div class="sigs">${sigEmp(c,f)}${sig(V("nome","Empregado(a)"),"Ciente em ____/____/________")}</div>`},
  REC(f,{V,c}){const v=parseBR(f.valor);const val=v?`<b>${brl(v)}</b> (${extenso(v)})`:`<span class="ph">valor</span>`;
    const doc=f.doc?`, inscrito(a) sob o nº ${esc(f.doc)}`:"";const top=`<div class="rtop"><div class="ttl">RECIBO</div><div class="valor">${brl(v)}</div></div>`;
    if(!f.modalidade||f.modalidade==="Recebimento de cliente")
@@ -403,6 +407,7 @@ const R={
    <p>A partir desta data, a guarda, a conservação e a manutenção da piscina e dos equipamentos passam a ser de responsabilidade do CONTRATANTE, mantidas as garantias aplicáveis${f.obs?" e o compromisso de solução das pendências acima":""}.</p>
    <div class="sigs">${sig(V("nome","Contratante"),"CONTRATANTE")}${sigEmp(c,f)}</div>`},
  ADI(f,{V,c,doc}){
+   const dig=String(f.formaAss||"").startsWith("Digital");
    const n=adSeq(doc),va=parseBR(f.valorAnt),vn=parseBR(f.valorNovo),dif=vn-va,P=x=>`<span class="ph">${x}</span>`;
    const it=String(f.alteracoes||"").split("\n").map(x=>x.trim()).filter(Boolean);
    const ORD=["PRIMEIRA","SEGUNDA","TERCEIRA","QUARTA","QUINTA"];let k=0;const cl=t=>`<p style="margin-top:5mm"><b style="color:var(--ink-navy)">CLÁUSULA ${ORD[k++]} — ${t}</b></p>`;
@@ -416,8 +421,9 @@ const R={
      :vn?`${cl("DO VALOR")}<p>Em razão das alterações acima, o valor total do contrato passa a ser de <b>${vf(vn)}</b>.</p>${f.pagamento?paras(f.pagamento):""}`
      :f.pagamento?`${cl("DO PAGAMENTO")}${paras(f.pagamento)}`:""}
    ${cl("DA RATIFICAÇÃO")}<p>Permanecem inalteradas e em pleno vigor todas as demais cláusulas e condições do contrato original que não tenham sido expressamente modificadas por este Termo Aditivo, que passa a fazer parte integrante daquele.</p>
-   <p>E, por estarem assim justas e de acordo, as partes assinam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença das testemunhas abaixo.</p>
-   <div class="sigs">${sig(V("nome","Contratante"),"CONTRATANTE")}${sigEmp(c,f)}${sigT(f,1)}${sigT(f,2)}</div>`},
+   ${dig?`<p>E, por estarem assim justas e de acordo, as partes assinam o presente instrumento por meio eletrônico, reconhecendo como válidas as assinaturas eletrônicas apostas, nos termos do art. 10, §2º, da Medida Provisória nº 2.200-2/2001 e do art. 784, §4º, do Código de Processo Civil.</p>`
+     :`<p>E, por estarem assim justas e de acordo, as partes assinam o presente instrumento em 2 (duas) vias de igual teor e forma${temTest("ADI",f)?", na presença das testemunhas abaixo":""}.</p>`}
+   <div class="sigs">${sig(V("nome","Contratante"),dig?"CONTRATANTE · assinatura eletrônica":"CONTRATANTE")}${sigEmp(c,f)}</div>`},
  DEC(f,{V,c}){
    if(f.modelo==="Texto livre")return `<div class="ttl">DECLARAÇÃO</div><p>${V("destinatario","A quem possa interessar")},</p>${f.corpo?paras(f.corpo):`<p><span class="ph">Texto da declaração</span></p>`}<div class="sigs one">${sigEmp(c,f)}</div>`;
    return `<div class="ttl">DECLARAÇÃO</div><p>A quem possa interessar,</p>
@@ -436,7 +442,7 @@ function paper(doc){
    <div class="lh"><img src="${LOGO}" alt="iGUi"><div><div class="zs">ZONA SUL - RJ</div><div class="tg">A sua piscina</div></div>
    <div class="nr">${esc(T.nome)}<b>Nº ${numero}</b>${rasc?"<em>próximo número</em>":""}</div></div>
    <div class="rule"></div><div class="dtl">${esc(doc.local||c.cidade)}, ${dExt(doc.data)}</div>
-   <div class="pbody">${R[doc.tipo](f,{V,c,doc})}</div>
+   <div class="pbody">${R[doc.tipo](f,{V,c,doc})}${temTest(doc.tipo,f)?`<div class="sigs tst">${sigT(f,1)}${sigT(f,2)}</div>${doc.tipo==="ADV"||doc.tipo==="SUS"?`<p class="nota">Em caso de recusa do(a) empregado(a) em assinar, as testemunhas atestam que este documento lhe foi apresentado e lido.</p>`:""}`:""}</div>
    <div class="pfoot"><div><b>${esc(c.razao)}</b> · CNPJ ${esc(c.cnpj)}<br>${esc(c.endereco)}${c.contato?" · "+esc(c.contato):""}</div><div class="fn">${numero}</div></div></div>`;
 }
 
@@ -474,10 +480,11 @@ function campo(x,d){
   let inp;
   if(x.t==="area")inp=`<textarea id="${id}" data-k="${x.k}" rows="${x.rows||4}"${ph}>${esc(v)}</textarea>`;
   else if(x.t==="select")inp=`<select id="${id}" data-k="${x.k}" data-re>${x.opts.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
-  else inp=`<input id="${id}" data-k="${x.k}" value="${esc(v)}" type="${x.t==="date"?"date":"text"}"${x.t==="num"?' inputmode="numeric"':x.t==="money"?' inputmode="decimal"':""}${ph}>`;
+  else inp=`<input id="${id}" data-k="${x.k}" value="${esc(v)}" type="${x.t==="date"?"date":"text"}"${x.list?' list="dlFunc" autocomplete="off"':""}${x.t==="num"?' inputmode="numeric"':x.t==="money"?' inputmode="decimal"':""}${ph}>`;
   return `<div class="fld" data-f="${x.k}">${lab}${inp}${x.h?`<small>${esc(x.h)}</small>`:""}</div>`;
 }
-function dica(){const d=cur(),f=d.f;
+function dica(){const d=cur(),f=d.f;const w=temTest(tipo,f)&&[f.test1,f.test2].some(x=>x&&norm(x)===norm(f.nome))?`<div class="hint warn">A testemunha não pode ser a mesma pessoa que assina como parte do documento.</div>`:"";return w+dica0(d,f)}
+function dica0(d,f){
   if(tipo==="ADV"||tipo==="SUS"){const a=antecedentes(ed?{f,id:ed.id,criadoEm:orig().criadoEm}:{f,id:null});
     let s=a.length?`<div class="hint warn">${esc(f.nome)} já tem ${a.length} medida${a.length>1?"s":""} registrada${a.length>1?"s":""}: ${a.map(x=>x.num).join(", ")}. Isso entra no texto automaticamente.</div>`:"";
     if(tipo==="SUS"&&parseInt(f.dias)>30)s+=`<div class="hint warn">A CLT limita a suspensão a 30 dias consecutivos (art. 474). Acima disso, a lei considera rescisão injusta.</div>`;
@@ -499,6 +506,7 @@ function vNovo(){const T=TIPOS[tipo],d=cur();
      <div class="sep"></div>
      ${flds}
      <div id="dica">${dica()}</div>
+     <datalist id="dlFunc">${S.pessoas.filter(p=>p.papel==="Funcionário").map(p=>`<option value="${esc(p.nome)}"></option>`).join("")}</datalist>
     </div>
     <div class="acts">
      ${ed?`<button class="btn pri" data-act="salvarEd">Salvar alterações</button><button class="btn" data-act="descartarEd">Descartar</button>`:`<button class="btn pri ${armado?"confirm":""}" data-act="emitir">${armado?`Confirmar emissão do ${proxNum(tipo,d.data)}`:"Emitir e registrar"}</button>
@@ -535,8 +543,8 @@ function emitir(){
 const ROT={data:"Data do documento",local:"Local",signNome:"Quem assina",signCargo:"Cargo de quem assina"};
 const rot=(t,k)=>ROT[k]||(allFields(t).find(x=>x.k===k)||{}).l||k;
 function difs(t,a,b){const ks=new Set([...Object.keys(a.f),...Object.keys(b.f)]);const o=[];if(a.data!==b.data)o.push("data");if((a.local||"")!==(b.local||""))o.push("local");
-  ks.forEach(k=>{if(k!=="pessoa"&&String(a.f[k]??"")!==String(b.f[k]??""))o.push(k)});return [...new Set(o.map(k=>rot(t,k)))]}
-function editar(d){ed={id:d.id,data:d.data,local:d.local,f:{...d.f}};tipo=d.tipo;view="novo";verId=null;cancelando=false;render();scrollTo(0,0)}
+  ks.forEach(k=>{if(k==="testem"&&!a.f.testem&&temTest("",{testem:b.f.testem})===temTest(t,a.f))return;if(/cpf$/.test(k)&&/^test/.test(k))return;if(k!=="pessoa"&&String(a.f[k]??"")!==String(b.f[k]??""))o.push(k)});return [...new Set(o.map(k=>rot(t,k)))]}
+function editar(d){ed={id:d.id,data:d.data,local:d.local,f:{...d.f}};if(!ed.f.testem)ed.f.testem=temTest(d.tipo,d.f)?TCOM:TSEM;tipo=d.tipo;view="novo";verId=null;cancelando=false;render();scrollTo(0,0)}
 function salvarEd(){const o=orig();if(!o){ed=null;render();return}
   const falta=emitir();if(falta.length){toast("Preencha: "+falta.join(", "));return}
   const ch=difs(o.tipo,o,ed);if(!ch.length){toast("Nenhuma alteração para salvar");return}
@@ -673,6 +681,7 @@ document.addEventListener("input",e=>{const t=e.target;
   if(view!=="novo")return;const d=cur();
   if(t.id==="d_data"){d.data=t.value;atualizaPrev();return}
   if(t.id==="d_local"){d.local=t.value;atualizaPrev();return}
+  if(t.dataset.k==="test1"||t.dataset.k==="test2"){const p=S.pessoas.find(x=>norm(x.nome)===norm(t.value));d.f[t.dataset.k+"cpf"]=p&&p.cpf||""}
   if(t.dataset.k){d.f[t.dataset.k]=t.value;delete d.exemplo;t.closest(".fld")?.classList.remove("err");if(t.hasAttribute("data-re")){render();return}atualizaPrev()}
 });
 document.addEventListener("change",e=>{const t=e.target;
